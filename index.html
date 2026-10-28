@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PharmaRévis</title>
+<style>
+:root{--bg:#f6f7f4;--card:#fff;--ink:#1c2a2e;--mute:#5d6b6e;--line:#d9dfdc;--acc:#2f4bb5;--accbg:#e8ecfb;--ok:#2c7a4b;--ko:#b3392f}
+@media(prefers-color-scheme:dark){:root{--bg:#14191b;--card:#1d2427;--ink:#e8eeee;--mute:#9aa8aa;--line:#2f3a3d;--acc:#8fa6ff;--accbg:#232c4d;--ok:#6cc58f;--ko:#ee8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+h1{font:700 1.6rem Georgia,serif;margin:8px 0 2px}
+.sub{color:var(--mute);margin:0 0 16px}
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:20px;overflow-x:auto}
+nav button{background:none;border:0;padding:10px 14px;font:inherit;color:var(--mute);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+nav button[aria-selected=true]{color:var(--ink);border-color:var(--acc);font-weight:600}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.card{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--acc);border-radius:6px;padding:22px;min-height:170px}
+.theme{color:var(--mute);font-size:.85rem;margin-bottom:10px}
+.q{font:1.35rem/1.35 Georgia,serif}
+.a{margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);font-size:1.1rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.btn{font:inherit;padding:9px 16px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.btn.p{background:var(--acc);border-color:var(--acc);color:#fff}
+@media(prefers-color-scheme:dark){.btn.p{color:#101418}}
+.btn:hover{border-color:var(--acc)}
+.stats{display:flex;gap:18px;color:var(--mute);font-size:.9rem;margin-bottom:12px;flex-wrap:wrap}
+.stats b{color:var(--ink)}
+.opt{display:block;width:100%;text-align:left;margin-top:8px}
+.opt.good{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}
+.opt.bad{border-color:var(--ko);background:color-mix(in srgb,var(--ko) 15%,transparent)}
+label{display:block;font-size:.9rem;color:var(--mute);margin:12px 0 4px}
+input,select,textarea{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+.res{margin-top:12px;padding:12px;background:var(--accbg);border-radius:6px;font-weight:600}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.grid{grid-template-columns:1fr}}
+section.box{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:16px}
+h2{font:700 1.1rem Georgia,serif;margin:0 0 4px}
+.muted{color:var(--mute);font-size:.9rem}
+.cloud{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:.9rem;color:var(--mute)}
+.cloud:empty{display:none}
+footer{margin-top:30px;color:var(--mute);font-size:.8rem}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>PharmaRévis</h1>
+<p class="sub">Révisions de pharmacie : cartes à répétition espacée, QCM et calculs.</p>
+<div class="cloud" id="cloud"></div>
+<nav role="tablist" id="tabs"></nav>
+
+<div id="v-rev"></div>
+<div id="v-qcm" class="hide"></div>
+<div id="v-ordo" class="hide"></div>
+<div id="v-cards" class="hide"></div>
+<div id="v-calc" class="hide"></div>
+
+<footer>Outil pédagogique : il ne remplace ni les sources officielles (ANSM, Thériaque, base publique des médicaments) ni l’avis d’un professionnel de santé. Données enregistrées dans ce navigateur, et synchronisées avec votre compte Google si vous vous connectez.</footer>
+</main>
+
+<script>
+const KEY='pharmarevis:v1';
+const DAY=864e5;
+const SEED=[
+["Antidote du paracétamol","N-acétylcystéine","Toxicologie"],
+["Antidote des AVK","Vitamine K (± PPSB en urgence)","Toxicologie"],
+["Antidote des benzodiazépines","Flumazénil","Toxicologie"],
+["Antidote des opioïdes","Naloxone","Toxicologie"],
+["Antidote de l’héparine non fractionnée","Sulfate de protamine","Toxicologie"],
+["Mécanisme des IEC","Inhibition de l’enzyme de conversion : baisse de l’angiotensine II","Cardiologie"],
+["Effet indésirable typique des IEC","Toux sèche (accumulation de bradykinine)","Cardiologie"],
+["Mécanisme des bêta-bloquants","Antagonisme des récepteurs bêta-adrénergiques","Cardiologie"],
+["Mécanisme de la digoxine","Inhibition de la Na+/K+ ATPase","Cardiologie"],
+["Mécanisme du furosémide","Inhibition du cotransporteur Na+/K+/2Cl- de l’anse de Henlé","Cardiologie"],
+["Mécanisme des statines","Inhibition de l’HMG-CoA réductase","Métabolisme"],
+["Mécanisme de la metformine","Baisse de la néoglucogenèse hépatique et meilleure sensibilité à l’insuline (AMPK)","Métabolisme"],
+["Contre-indication majeure de la metformine","Insuffisance rénale sévère (DFG < 30 mL/min)","Métabolisme"],
+["Mécanisme des AVK","Inhibition de la vitamine K époxyde réductase : baisse des facteurs II, VII, IX, X","Hémostase"],
+["Paramètre de surveillance des AVK","INR","Hémostase"],
+["Mécanisme antiagrégant de l’aspirine","Inhibition irréversible de la COX-1 plaquettaire : baisse du thromboxane A2","Hémostase"],
+["Mécanisme des AINS","Inhibition des cyclooxygénases (COX-1 et COX-2)","Inflammation"],
+["Mécanisme des IPP","Inhibition de la pompe H+/K+ ATPase des cellules pariétales","Gastro-entérologie"],
+["Mécanisme des bêta-lactamines","Inhibition de la synthèse du peptidoglycane (liaison aux PLP)","Anti-infectieux"],
+["Mécanisme des fluoroquinolones","Inhibition de l’ADN gyrase et de la topoisomérase IV","Anti-infectieux"],
+["Toxicité majeure des aminosides","Néphrotoxicité et ototoxicité","Anti-infectieux"],
+["Mécanisme des benzodiazépines","Modulation allostérique positive du récepteur GABA-A","Neuropsychiatrie"]
+];
+const COLORS=['#2f4bb5','#2c7a4b','#b3392f','#8a5a00','#6b3fa0','#007a87','#a03f73','#4f5d2a'];
+let S=load();
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.cards)return s}catch(e){}
+  return{cards:SEED.map(mk)}}
+function mk([q,a,t]){return{id:crypto.randomUUID(),q,a,t,ease:2.5,int:0,reps:0,due:0}}
+function save(){S.updated=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(window.onSave)window.onSave()}
+window.App={get:()=>S,set:v=>{S=v;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}cur=null;qz=null;show()}};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const themes=()=>[...new Set(S.cards.map(c=>c.t||'Divers'))].sort();
+const tcol=t=>COLORS[themes().indexOf(t||'Divers')%COLORS.length];
+
+/* Onglets */
+const TABS=[['rev','Réviser'],['qcm','QCM'],['ordo','Ordonnances'],['cards','Mes cartes'],['calc','Calculs']];
+let tab='rev';
+function drawTabs(){$('#tabs').innerHTML=TABS.map(([k,l])=>`<button role="tab" aria-selected="${k===tab}" data-k="${k}">${l}</button>`).join('');
+ document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.k;show()})}
+function show(){drawTabs();TABS.forEach(([k])=>$('#v-'+k).classList.toggle('hide',k!==tab));
+ ({rev:rev,qcm:qcm,ordo:ordo,cards:cards,calc:calc})[tab]()}
+
+/* Thème filtre partagé */
+let filt='';
+function filterSel(onch){return`<label for="flt">Thème</label><select id="flt"><option value="">Tous les thèmes</option>${themes().map(t=>`<option ${t===filt?'selected':''}>${esc(t)}</option>`).join('')}</select>`}
+const pool=()=>S.cards.filter(c=>!filt||(c.t||'Divers')===filt);
+
+/* Révision SM-2 */
+let cur=null,shown=false;
+function dueCards(){const n=Date.now();return pool().filter(c=>c.due<=n).sort((a,b)=>a.due-b.due)}
+function rev(){
+ const el=$('#v-rev'),d=dueCards();
+ const learned=pool().filter(c=>c.reps>=3).length;
+ let h=`<div class="stats"><span><b>${d.length}</b> à revoir</span><span><b>${learned}</b> / ${pool().length} acquises</span></div>`;
+ if(!d.length){h+=`<div class="card"><p class="q">Rien à revoir pour le moment.</p><p class="muted">Ajoutez des cartes dans « Mes cartes » ou revenez demain.</p></div>`+filterSel();el.innerHTML=h;bind();return}
+ if(!cur||!d.includes(cur)){cur=d[0];shown=false}
+ h+=`<div class="card" style="border-left-color:${tcol(cur.t)}"><div class="theme">${esc(cur.t||'Divers')}</div><div class="q">${esc(cur.q)}</div>${shown?`<div class="a">${esc(cur.a)}</div>`:''}</div>`;
+ h+=shown?`<div class="row"><button class="btn" data-g="0">À revoir</button><button class="btn" data-g="3">Difficile</button><button class="btn p" data-g="4">Bien</button><button class="btn" data-g="5">Facile</button></div>`
+  :`<div class="row"><button class="btn p" id="rv">Afficher la réponse</button></div>`;
+ el.innerHTML=h+filterSel();bind();
+ if($('#rv'))$('#rv').onclick=()=>{shown=true;rev()};
+ el.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>grade(+b.dataset.g));
+}
+function grade(g){const c=cur;
+ if(g<3){c.reps=0;c.int=0;c.due=Date.now()+10*60e3}
+ else{c.reps++;c.int=c.reps===1?1:c.reps===2?3:Math.round(c.int*c.ease);
+  if(g===3)c.int=Math.max(1,Math.round(c.int*.8));if(g===5)c.int=Math.round(c.int*1.3);
+  c.due=Date.now()+c.int*DAY}
+ c.ease=Math.max(1.3,c.ease+(0.1-(5-g)*(0.08+(5-g)*0.02)));
+ save();cur=null;rev()}
+function bind(){const f=$('#flt');if(f)f.onchange=()=>{filt=f.value;cur=null;qz=null;show()}}
+
+/* QCM */
+let qz=null;
+function qcm(){
+ const el=$('#v-qcm'),p=pool();
+ if(p.length<4){el.innerHTML=`<div class="card"><p class="q">Il faut au moins 4 cartes pour faire un QCM.</p></div>`+filterSel();bind();return}
+ if(!qz){const c=p[Math.floor(Math.random()*p.length)];
+  const others=S.cards.filter(x=>x.id!==c.id&&x.a!==c.a).sort(()=>Math.random()-.5);
+  const same=others.filter(x=>x.t===c.t),rest=others.filter(x=>x.t!==c.t);
+  const wrong=[...same,...rest].slice(0,3).map(x=>x.a);
+  qz={c,opts:[c.a,...wrong].sort(()=>Math.random()-.5),done:false,score:qz?qz.score:0}}
+ const sc=window._sc||(window._sc={ok:0,n:0});
+ let h=`<div class="stats"><span>Score : <b>${sc.ok}</b> / ${sc.n}</span></div><div class="card" style="border-left-color:${tcol(qz.c.t)}"><div class="theme">${esc(qz.c.t||'Divers')}</div><div class="q">${esc(qz.c.q)}</div></div>`;
+ h+=qz.opts.map((o,i)=>`<button class="btn opt" data-i="${i}">${esc(o)}</button>`).join('');
+ h+=`<div class="row"><button class="btn p hide" id="nx">Question suivante</button></div>`+filterSel();
+ el.innerHTML=h;bind();
+ el.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+  if(qz.done)return;qz.done=true;sc.n++;
+  const ok=qz.opts[+b.dataset.i]===qz.c.a;if(ok)sc.ok++;
+  el.querySelectorAll('.opt').forEach((x,i)=>{if(qz.opts[i]===qz.c.a)x.classList.add('good')});
+  if(!ok)b.classList.add('bad');
+  if(!ok){qz.c.due=Math.min(qz.c.due,Date.now());save()}
+  $('#nx').classList.remove('hide');$('#nx').onclick=()=>{qz=null;qcm()};
+  el.querySelector('.stats').innerHTML=`<span>Score : <b>${sc.ok}</b> / ${sc.n}</span>`});
+}
+
+/* Cartes : ajout, import, export */
+function cards(){
+ const el=$('#v-cards');
+ el.innerHTML=`<section class="box"><h2>Ajouter une carte</h2>
+ <label for="nq">Question</label><input id="nq">
+ <label for="na">Réponse</label><input id="na">
+ <label for="nt">Thème</label><input id="nt" list="tl" placeholder="ex. Cardiologie"><datalist id="tl">${themes().map(t=>`<option>${esc(t)}`).join('')}</datalist>
+ <div class="row"><button class="btn p" id="add">Ajouter</button></div></section>
+ <section class="box"><h2>Importer / exporter</h2>
+ <p class="muted">Fichier CSV à trois colonnes : question ; réponse ; thème (séparateur « ; » ou « , »).</p>
+ <div class="row"><input type="file" id="imp" accept=".csv,.txt" style="width:auto"><button class="btn" id="exp">Exporter en CSV</button></div></section>
+ ${packsHtml()}
+ <section class="box"><h2>${S.cards.length} cartes</h2><div id="list"></div>
+ <div class="row"><button class="btn" id="rst">Réinitialiser les révisions</button></div></section>`;
+ $('#list').innerHTML=S.cards.map(c=>`<div style="padding:8px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;justify-content:space-between"><span><b>${esc(c.q)}</b><br><span class="muted">${esc(c.a)} · ${esc(c.t||'Divers')}</span></span><button class="btn" data-del="${c.id}" aria-label="Supprimer">✕</button></div>`).join('');
+ bindPacks(el);
+ $('#add').onclick=()=>{const q=$('#nq').value.trim(),a=$('#na').value.trim();if(!q||!a){alert('Renseignez la question et la réponse.');return}
+  S.cards.push(mk([q,a,$('#nt').value.trim()||'Divers']));save();cards()};
+ el.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('Supprimer cette carte ?')){S.cards=S.cards.filter(c=>c.id!==b.dataset.del);save();cards()}});
+ $('#rst').onclick=()=>{if(confirm('Remettre toutes les cartes à zéro ?')){S.cards.forEach(c=>Object.assign(c,{ease:2.5,int:0,reps:0,due:0}));save();cards()}};
+ $('#exp').onclick=()=>{const csv=S.cards.map(c=>[c.q,c.a,c.t||''].map(v=>'"'+v.replace(/"/g,'""')+'"').join(';')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv'}));a.download='pharmarevis.csv';a.click()};
+ $('#imp').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{let n=0;r.result.replace(/^\ufeff/,'').split(/\r?\n/).forEach(l=>{if(!l.trim())return;
+    const sep=l.includes(';')?';':',';const p=l.split(sep).map(x=>x.trim().replace(/^"|"$/g,'').replace(/""/g,'"'));
+    if(p[0]&&p[1]){S.cards.push(mk([p[0],p[1],p[2]||'Divers']));n++}});
+   save();alert(n+' carte(s) importée(s).');cards()};r.readAsText(f)};
+}
+
+/* Calculs */
+function calc(){
+ $('#v-calc').innerHTML=`
+ <section class="box"><h2>Clairance de la créatinine (Cockcroft-Gault)</h2>
+ <p class="muted">DFG estimé = (140 − âge) × poids × k / créatininémie en µmol/L ; k = 1,23 (homme) ou 1,04 (femme).</p>
+ <div class="grid"><div><label for="cg-a">Âge (ans)</label><input id="cg-a" type="number" min="1"></div>
+ <div><label for="cg-p">Poids (kg)</label><input id="cg-p" type="number" min="1"></div>
+ <div><label for="cg-c">Créatinine (µmol/L)</label><input id="cg-c" type="number" min="1"></div>
+ <div><label for="cg-s">Sexe</label><select id="cg-s"><option value="1.23">Homme</option><option value="1.04">Femme</option></select></div></div>
+ <div class="res" id="cg-r">Renseignez les champs.</div></section>
+ <section class="box"><h2>Dilution (C₁ × V₁ = C₂ × V₂)</h2>
+ <p class="muted">Volume de solution mère à prélever.</p>
+ <div class="grid"><div><label for="d-c1">Concentration mère C₁</label><input id="d-c1" type="number" min="0" step="any"></div>
+ <div><label for="d-c2">Concentration finale C₂</label><input id="d-c2" type="number" min="0" step="any"></div>
+ <div><label for="d-v2">Volume final V₂ (mL)</label><input id="d-v2" type="number" min="0" step="any"></div></div>
+ <div class="res" id="d-r">Renseignez les champs (même unité pour C₁ et C₂).</div></section>
+ <section class="box"><h2>Débit de perfusion</h2>
+ <div class="grid"><div><label for="p-v">Volume (mL)</label><input id="p-v" type="number" min="0" step="any"></div>
+ <div><label for="p-h">Durée (heures)</label><input id="p-h" type="number" min="0" step="any"></div>
+ <div><label for="p-g">Gouttes par mL</label><select id="p-g"><option value="20">20 (perfuseur standard)</option><option value="60">60 (pédiatrique)</option></select></div></div>
+ <div class="res" id="p-r">Renseignez les champs.</div></section>`;
+ const n=id=>parseFloat($('#'+id).value);
+ const cg=()=>{const a=n('cg-a'),p=n('cg-p'),c=n('cg-c'),k=+$('#cg-s').value;
+  $('#cg-r').textContent=(a>0&&p>0&&c>0)?`≈ ${((140-a)*p*k/c).toFixed(0)} mL/min`:'Renseignez les champs.'};
+ const dl=()=>{const c1=n('d-c1'),c2=n('d-c2'),v2=n('d-v2');
+  if(c1>0&&c2>0&&v2>0){if(c2>c1){$('#d-r').textContent='C₂ doit être inférieure ou égale à C₁.';return}
+   const v1=c2*v2/c1;$('#d-r').textContent=`Prélever ${v1.toFixed(2)} mL de solution mère, compléter à ${v2} mL (${(v2-v1).toFixed(2)} mL de diluant).`}
+  else $('#d-r').textContent='Renseignez les champs (même unité pour C₁ et C₂).'};
+ const pf=()=>{const v=n('p-v'),h=n('p-h'),g=+$('#p-g').value;
+  $('#p-r').textContent=(v>0&&h>0)?`${(v/h).toFixed(1)} mL/h, soit ${Math.round(v*g/(h*60))} gouttes/min`:'Renseignez les champs.'};
+ [['cg',cg],['d',dl],['p',pf]].forEach(([p,f])=>document.querySelectorAll(`[id^="${p}-"]:not(.res)`).forEach(i=>{i.oninput=f;i.onchange=f}));
+}
+/* Packs de cartes par thème */
+const PACKS={
+"Anti-infectieux (suite)":[
+["Mécanisme des macrolides","Fixation à la sous-unité 50S du ribosome : inhibition de la synthèse protéique","Anti-infectieux"],
+["Mécanisme des aminosides","Fixation à la sous-unité 30S du ribosome : bactéricide, erreurs de lecture","Anti-infectieux"],
+["Mécanisme des cyclines","Fixation à la sous-unité 30S du ribosome : blocage de l’ARNt (bactériostatique)","Anti-infectieux"],
+["Mécanisme du cotrimoxazole","Blocage séquentiel de la synthèse de l’acide folique (sulfaméthoxazole + triméthoprime)","Anti-infectieux"],
+["Mécanisme de la vancomycine","Liaison au D-Ala-D-Ala : inhibition de la synthèse du peptidoglycane","Anti-infectieux"],
+["Mécanisme de la rifampicine","Inhibition de l’ARN polymérase bactérienne (et inducteur enzymatique puissant)","Anti-infectieux"]],
+"Système nerveux":[
+["Mécanisme des ISRS","Inhibition de la recapture de la sérotonine","Neuropsychiatrie"],
+["Mécanisme des neuroleptiques classiques","Antagonisme des récepteurs dopaminergiques D2","Neuropsychiatrie"],
+["Effet indésirable typique des neuroleptiques classiques","Syndrome extrapyramidal","Neuropsychiatrie"],
+["Pourquoi associer la carbidopa à la L-DOPA ?","Elle inhibe la dopa-décarboxylase périphérique : plus de L-DOPA atteint le cerveau, moins d’effets périphériques","Neuropsychiatrie"],
+["Mécanisme du donépézil","Inhibition de l’acétylcholinestérase","Neuropsychiatrie"],
+["Mécanisme des opioïdes forts (morphine)","Agonistes des récepteurs μ","Neuropsychiatrie"],
+["Mécanisme des anesthésiques locaux","Blocage des canaux sodiques voltage-dépendants","Neuropsychiatrie"]],
+"Endocrinologie et respiratoire":[
+["Mécanisme des sulfamides hypoglycémiants","Fermeture des canaux K+ ATP-dépendants des cellules bêta : sécrétion d’insuline","Métabolisme"],
+["Mécanisme des gliptines","Inhibition de la DPP-4 : augmentation des incrétines (GLP-1)","Métabolisme"],
+["Mécanisme des gliflozines","Inhibition du cotransporteur SGLT2 : glycosurie","Métabolisme"],
+["Paramètre de surveillance de la lévothyroxine","TSH","Métabolisme"],
+["Mécanisme des bêta-2-mimétiques","Agonistes des récepteurs bêta-2 : bronchodilatation","Respiratoire"],
+["Mécanisme des corticoïdes inhalés","Action anti-inflammatoire via le récepteur aux glucocorticoïdes (modulation de la transcription)","Respiratoire"]],
+"Pharmacocinétique":[
+["Définition de la biodisponibilité","Fraction de la dose qui atteint la circulation générale sous forme inchangée, et vitesse d’accès","Pharmacocinétique"],
+["Définition de la clairance","Volume de plasma totalement épuré d’une substance par unité de temps","Pharmacocinétique"],
+["Définition de la demi-vie","Temps nécessaire pour que la concentration plasmatique diminue de moitié","Pharmacocinétique"],
+["Délai pour atteindre l’état d’équilibre","Environ 4 à 5 demi-vies","Pharmacocinétique"],
+["Effet de premier passage hépatique","Métabolisme hépatique avant la circulation générale : baisse de la biodisponibilité orale","Pharmacocinétique"],
+["Inducteurs enzymatiques classiques","Rifampicine, carbamazépine, phénytoïne, phénobarbital, millepertuis","Pharmacocinétique"],
+["Inhibiteurs classiques du CYP3A4","Clarithromycine, kétoconazole, itraconazole, ritonavir, jus de pamplemousse","Pharmacocinétique"]]
+};
+function packsHtml(){return`<section class="box"><h2>Packs de cartes</h2><p class="muted">Ajoute des cartes par thème (les doublons sont ignorés).</p>`+
+ Object.keys(PACKS).map(k=>`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px 0"><span>${esc(k)} <span class="muted">(${PACKS[k].length})</span></span><button class="btn" data-pack="${esc(k)}">Ajouter</button></div>`).join('')+`</section>`}
+function bindPacks(el){el.querySelectorAll('[data-pack]').forEach(b=>b.onclick=()=>{
+ let n=0;PACKS[b.dataset.pack].forEach(p=>{if(!S.cards.some(c=>c.q===p[0])){S.cards.push(mk(p));n++}});
+ save();alert(n+' carte(s) ajoutée(s).');cards()})}
+
+/* Simulateur d'ordonnances */
+const CASES=[
+{pt:"Homme de 72 ans, sous traitement anticoagulant au long cours",rx:["Warfarine 5 mg : 1 comprimé le soir","Ibuprofène 400 mg : 1 comprimé 3 fois par jour pendant 10 jours","Oméprazole 20 mg : 1 gélule par jour"],
+ o:[["Association AVK + AINS : risque hémorragique majeur, à ne pas délivrer sans avis",1],["Oméprazole contre-indiqué avec la warfarine",0],["AINS peu adaptés au sujet âgé (risque digestif et rénal)",1]],
+ e:"L’association AVK + AINS est contre-indiquée (saignements, agression de la muqueuse gastrique). Il faut contacter le prescripteur et proposer une alternative comme le paracétamol. L’oméprazole n’est pas contre-indiqué ici : il protège plutôt l’estomac."},
+{pt:"Femme de 28 ans, enceinte de 5 mois (2e trimestre)",rx:["Ramipril 5 mg : 1 comprimé par jour","Paracétamol 1 g : 1 comprimé si douleur, 3 fois par jour maximum"],
+ o:[["IEC contre-indiqué aux 2e et 3e trimestres de grossesse (fœtotoxicité)",1],["Paracétamol contre-indiqué pendant la grossesse",0],["Dose maximale de paracétamol dépassée",0]],
+ e:"Les IEC (et les sartans) sont fœtotoxiques à partir du 2e trimestre : il faut joindre le prescripteur sans délai. Le paracétamol reste l’antalgique de première intention pendant la grossesse, et 3 g par jour est une posologie usuelle."},
+{pt:"Homme de 80 ans, 55 kg, créatininémie 160 µmol/L",rx:["Metformine 1000 mg : 1 comprimé 3 fois par jour"],
+ o:[["Metformine contre-indiquée : clairance estimée ≈ 25 mL/min (seuil : 30)",1],["Posologie maximale dépassée (plus de 3 g par jour)",0],["Contacter le prescripteur avant la délivrance",1]],
+ e:"Cockcroft-Gault : (140 − 80) × 55 × 1,23 / 160 ≈ 25 mL/min. En dessous de 30, la metformine est contre-indiquée (risque d’acidose lactique). La dose de 3 g par jour est la dose maximale, pas un dépassement. Testez le calcul dans l’onglet Calculs."},
+{pt:"Enfant de 4 ans, 16 kg, fièvre",rx:["Paracétamol 500 mg : 1 comprimé 4 fois par jour"],
+ o:[["Surdosage : 2 g par jour ≈ 125 mg/kg/j (maximum 60 mg/kg/j)",1],["Forme comprimé inadaptée à l’âge (risque de fausse route)",1],["Paracétamol contre-indiqué chez l’enfant",0]],
+ e:"À 16 kg, la dose maximale est d’environ 960 mg par jour, soit environ 240 mg par prise (4 prises). Il faut une forme pédiatrique (suspension buvable ou suppositoire) dosée au poids, et prévenir le prescripteur."},
+{pt:"Homme de 60 ans, hypercholestérolémie traitée",rx:["Simvastatine 20 mg : 1 comprimé le soir","Clarithromycine 500 mg : 1 comprimé 2 fois par jour pendant 7 jours"],
+ o:[["Interaction (CYP3A4) : risque de rhabdomyolyse, association contre-indiquée",1],["Aucune interaction : ce sont deux classes différentes",0],["Demander au prescripteur de suspendre la statine ou de changer d’antibiotique",1]],
+ e:"La clarithromycine inhibe fortement le CYP3A4 et augmente les concentrations de simvastatine : risque de rhabdomyolyse. La solution se décide avec le prescripteur (suspension temporaire de la statine, ou autre antibiotique)."}];
+let ci=-1,osc={ok:0,n:0};
+function ordo(){const el=$('#v-ordo');if(ci<0)ci=Math.floor(Math.random()*CASES.length);const c=CASES[ci];
+ el.innerHTML=`<div class="stats"><span>Cas réussis : <b>${osc.ok}</b> / ${osc.n}</span></div>
+ <div class="card"><div class="theme">${esc(c.pt)}</div>${c.rx.map(l=>`<div style="margin:6px 0;font-size:1.05rem">• ${esc(l)}</div>`).join('')}</div>
+ <p class="muted" style="margin:14px 0 2px">Cochez tout ce qui est vrai pour cette ordonnance :</p>
+ ${c.o.map((o,i)=>`<label style="display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:1rem;padding:8px 0"><input type="checkbox" style="width:auto;margin-top:5px" data-i="${i}"><span>${esc(o[0])}</span></label>`).join('')}
+ <div class="row"><button class="btn p" id="ov">Valider</button><button class="btn hide" id="on">Autre ordonnance</button></div><div id="oe"></div>`;
+ $('#ov').onclick=()=>{let all=true;
+  el.querySelectorAll('input').forEach(i=>{const o=c.o[+i.dataset.i],ok=i.checked===!!o[1];if(!ok)all=false;i.disabled=true;
+   i.parentNode.lastChild.insertAdjacentHTML('beforeend',` <b style="color:var(--${ok?'ok':'ko'})">${ok?'✔':'✘ '+(o[1]?'à cocher':'à ne pas cocher')}</b>`)});
+  osc.n++;if(all)osc.ok++;
+  $('#oe').innerHTML=`<div class="res">${all?'Bien vu. ':'À revoir. '}${esc(c.e)}</div>`;
+  $('#ov').classList.add('hide');$('#on').classList.remove('hide');
+  el.querySelector('.stats').innerHTML=`<span>Cas réussis : <b>${osc.ok}</b> / ${osc.n}</span>`;
+  $('#on').onclick=()=>{let n;do{n=Math.floor(Math.random()*CASES.length)}while(n===ci&&CASES.length>1);ci=n;ordo()}};
+}
+show();
+</script>
+<script type="module">
+const box=document.querySelector('#cloud');
+let cfg=null;
+try{cfg=(await import('./firebase-config.js')).firebaseConfig}catch(e){}
+if(cfg&&cfg.apiKey&&!cfg.apiKey.startsWith('VOTRE')){
+ const B='https://www.gstatic.com/firebasejs/10.14.1/';
+ const [{initializeApp},A,F]=await Promise.all([import(B+'firebase-app.js'),import(B+'firebase-auth.js'),import(B+'firebase-firestore.js')]);
+ const app=initializeApp(cfg),auth=A.getAuth(app),db=F.getFirestore(app);
+ let user=null,timer=null,msg='';
+ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ const say=(m)=>{msg=m;const e=document.querySelector('#cst');if(e)e.textContent=m};
+ function draw(){
+  box.innerHTML=user
+   ?`<span>Connecté : ${esc(user.email||'')}</span><span id="cst">${esc(msg)}</span><button class="btn" id="lo">Se déconnecter</button>`
+   :`<button class="btn p" id="li">Se connecter avec Google</button><span>pour synchroniser vos cartes entre appareils</span>`;
+  const li=document.querySelector('#li'),lo=document.querySelector('#lo');
+  if(li)li.onclick=async()=>{try{await A.signInWithPopup(auth,new A.GoogleAuthProvider())}catch(e){alert('Connexion impossible : '+(e.code||e.message))}};
+  if(lo)lo.onclick=()=>A.signOut(auth);
+ }
+ const ref=()=>F.doc(db,'users',user.uid);
+ async function push(){
+  if(!user)return;
+  try{const s=App.get();await F.setDoc(ref(),{data:JSON.stringify(s),updated:s.updated||0});say('Synchronisé')}
+  catch(e){say('Erreur de synchronisation ('+(e.code||'réseau')+')')}
+ }
+ window.onSave=()=>{if(!user)return;say('Synchronisation…');clearTimeout(timer);timer=setTimeout(push,1500)};
+ A.onAuthStateChanged(auth,async u=>{
+  user=u;msg='';draw();
+  if(!u)return;
+  try{
+   const snap=await F.getDoc(ref());
+   const loc=App.get();
+   if(snap.exists()&&(snap.data().updated||0)>(loc.updated||0)){
+    const cloud=JSON.parse(snap.data().data);
+    if(cloud&&Array.isArray(cloud.cards)){App.set(cloud);say('Données chargées depuis le cloud');return}
+   }
+   await push();
+  }catch(e){say('Erreur de synchronisation ('+(e.code||'réseau')+')')}
+ });
+ draw();
+}
+</script>
+
+</body>
+</html>
